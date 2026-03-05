@@ -1,0 +1,14 @@
+---
+# ═══════════════════════════════════════════════════════════
+# site.yml - Main entry point
+# Run: ansible-playbook site.yml --ask-vault-pass
+# ═══════════════════════════════════════════════════════════
+
+- name: Setup Jenkins Server
+  hosts: jenkins
+  become: yes
+
+  roles:
+    - docker            # 1. Install Docker
+    - jenkins           # 2. Install Jenkins + Java + Trivy + yq
+    - monitoring_agent  # 3. Install Node Exporter (Prometheus scrapes this)

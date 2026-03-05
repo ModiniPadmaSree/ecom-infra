@@ -1,0 +1,98 @@
+---
+# tasks file for roles/jenkins
+---
+# ── JAVA ──────────────────────────────────────────────────
+- name: Install Java 17
+  apt:
+    name: openjdk-17-jdk
+    state: present
+    update_cache: yes
+
+# ── JENKINS ───────────────────────────────────────────────
+- name: Add Jenkins GPG key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    state: present
+
+- name: Add Jenkins repository
+  apt_repository:
+    repo: "deb https://pkg.jenkins.io/debian-stable binary/"
+    state: present
+
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+    update_cache: yes
+
+- name: Start and enable Jenkins
+  service:
+    name: jenkins
+    state: started
+    enabled: yes
+
+- name: Add jenkins to docker group
+  user:
+    name: jenkins
+    groups: docker
+    append: yes
+  notify: restart jenkins
+
+- name: Add jenkins to sudoers
+  lineinfile:
+    path: /etc/sudoers
+    line: "jenkins ALL=(ALL) NOPASSWD: ALL"
+    validate: visudo -cf %s
+
+- name: Wait for Jenkins to start
+  wait_for:
+    port: "{{ jenkins_port }}"
+    delay: 10
+    timeout: 60
+
+- name: Get Jenkins initial admin password
+  command: cat {{ jenkins_home }}/secrets/initialAdminPassword
+  register: jenkins_password
+  changed_when: false
+
+- name: Print Jenkins initial password
+  debug:
+    msg: "Jenkins initial password: {{ jenkins_password.stdout }}"
+
+# ── TRIVY ─────────────────────────────────────────────────
+- name: Install Trivy dependencies
+  apt:
+    name:
+      - wget
+      - apt-transport-https
+      - gnupg
+    state: present
+
+- name: Add Trivy GPG key
+  apt_key:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    state: present
+
+- name: Add Trivy repository
+  apt_repository:
+    repo: "deb https://aquasecurity.github.io/trivy-repo/deb generic main"
+    state: present
+
+- name: Install Trivy
+  apt:
+    name: trivy
+    state: present
+    update_cache: yes
+
+# ── YQ ────────────────────────────────────────────────────
+- name: Install yq
+  get_url:
+    url: https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    dest: /usr/local/bin/yq
+    mode: '0755'
+
+# ── GIT ───────────────────────────────────────────────────
+- name: Install Git
+  apt:
+    name: git
+    state: present
