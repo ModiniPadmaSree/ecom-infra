@@ -1,6 +1,4 @@
 ---
-# tasks file for roles/monitoring_agent
----
 - name: Create node_exporter system user
   user:
     name: node_exporter

@@ -1,6 +1,4 @@
 ---
-# tasks file for roles/jenkins
----
 # ── JAVA ──────────────────────────────────────────────────
 - name: Install Java 17
   apt:
