@@ -1,0 +1,17 @@
+---
+jenkins_ec2_public_ip: "52.205.169.19" 
+jenkins_url: "http://{{ jenkins_ec2_public_ip }}:{{ jenkins_port }}"
+jenkins_port: 8080
+jenkins_home: /var/lib/jenkins
+
+# ── Docker ──────────────────────────────────────────────────────
+docker_users:
+  - ubuntu
+  - jenkins
+
+# ── Monitoring ──────────────────────────────────────────────────
+node_exporter_version: "1.7.0"
+
+# ── DockerHub (values pulled from vault) ────────────────────────
+dockerhub_username: "{{ vault_dockerhub_username }}"
+dockerhub_password: "{{ vault_dockerhub_password }}"
