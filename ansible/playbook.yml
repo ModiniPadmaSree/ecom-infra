@@ -1,0 +1,9 @@
+---
+- name: Setup Jenkins Server on EC2
+  hosts: jenkins
+  become: yes
+
+  roles:
+    - docker       # 1. Install Docker CE
+    - jenkins      # 2. Install Java 17 + Jenkins + Trivy + yq + Git
+    - monitoring   # 3. Install Node Exporter (Prometheus scrapes port 9100)

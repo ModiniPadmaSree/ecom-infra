@@ -1,0 +1,113 @@
+---
+# tasks file for roles/jenkins
+---
+# ── JAVA ──────────────────────────────────────────────────
+- name: Install Java 17
+  apt:
+    name: openjdk-17-jdk
+    state: present
+    update_cache: yes
+
+# ── JENKINS ───────────────────────────────────────────────
+- name: Add Jenkins GPG key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    state: present
+
+- name: Add Jenkins repository
+  apt_repository:
+    repo: "deb https://pkg.jenkins.io/debian-stable binary/"
+    state: present
+
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+    update_cache: yes
+
+- name: Start and enable Jenkins
+  service:
+    name: jenkins
+    state: started
+    enabled: yes
+
+- name: Add jenkins to docker group
+  user:
+    name: jenkins
+    groups: docker
+    append: yes
+
+- name: Restart Jenkins after docker group change
+  service:
+    name: jenkins
+    state: restarted
+
+- name: Add jenkins to sudoers
+  lineinfile:
+    path: /etc/sudoers
+    line: "jenkins ALL=(ALL) NOPASSWD: ALL"
+    validate: visudo -cf %s
+
+- name: Wait for Jenkins to be reachable on port {{ jenkins_port }}
+  wait_for:
+    host: "0.0.0.0"
+    port: "{{ jenkins_port }}"
+    delay: 15
+    timeout: 90
+    state: started
+
+- name: Get Jenkins initial admin password
+  command: cat {{ jenkins_home }}/secrets/initialAdminPassword
+  register: jenkins_password
+  changed_when: false
+  retries: 5
+  delay: 10
+  until: jenkins_password.rc == 0
+
+- name: Print Jenkins access info
+  debug:
+    msg:
+      - "=================================================="
+      - " Jenkins is UP!"
+      - " URL      : http://{{ jenkins_ec2_public_ip }}:{{ jenkins_port }}"
+      - " Password : {{ jenkins_password.stdout }}"
+      - " NOTE: Ensure port 8080 is open in Security Group!"
+      - "=================================================="
+
+# ── TRIVY ─────────────────────────────────────────────────
+- name: Install Trivy dependencies
+  apt:
+    name:
+      - wget
+      - apt-transport-https
+      - gnupg
+    state: present
+
+- name: Add Trivy GPG key
+  apt_key:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    state: present
+
+- name: Add Trivy repository
+  apt_repository:
+    repo: "deb https://aquasecurity.github.io/trivy-repo/deb generic main"
+    state: present
+
+- name: Install Trivy
+  apt:
+    name: trivy
+    state: present
+    update_cache: yes
+
+# ── YQ ────────────────────────────────────────────────────
+- name: Install yq
+  get_url:
+    url: https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+    dest: /usr/local/bin/yq
+    mode: '0755'
+
+# ── GIT ───────────────────────────────────────────────────
+- name: Install Git
+  apt:
+    name: git
+    state: present
