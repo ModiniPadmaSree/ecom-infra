@@ -1,4 +1,0 @@
----
-# defaults file for roles/jenkins
-jenkins_port: 8080
-jenkins_home: /var/lib/jenkins

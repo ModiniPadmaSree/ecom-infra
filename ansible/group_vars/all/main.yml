@@ -1,9 +1,0 @@
-node_exporter_version: "1.7.0"
-
-docker_users:
-  - ubuntu
-  - jenkins
-
-# These come from vault.yml (encrypted)
-dockerhub_username: "{{ vault_dockerhub_username }}"
-dockerhub_password: "{{ vault_dockerhub_password }}"
