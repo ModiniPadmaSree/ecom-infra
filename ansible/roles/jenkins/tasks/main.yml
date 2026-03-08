@@ -1,28 +1,59 @@
 ---
-# tasks file for roles/jenkins
 # ── JAVA ──────────────────────────────────────────────────
-- name: Install Java 17
+- name: Install Java 17 and fontconfig
   apt:
-    name: openjdk-17-jdk
+    name:
+      - openjdk-17-jdk
+      - fontconfig
     state: present
     update_cache: yes
 
 # ── JENKINS ───────────────────────────────────────────────
-- name: Add Jenkins GPG key
-  apt_key:
-    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-    state: present
+- name: Remove all old Jenkins files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/jenkins.list
+    - /etc/apt/keyrings/jenkins-keyring.asc
+    - /usr/share/keyrings/jenkins-keyring.asc
+    - /usr/share/keyrings/jenkins-keyring.gpg
+    - /etc/apt/trusted.gpg.d/jenkins.gpg
+
+- name: Remove Jenkins from sources.list
+  lineinfile:
+    path: /etc/apt/sources.list
+    regexp: ".*pkg.jenkins.io.*"
+    state: absent
+
+- name: Create apt keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+# Official 2026 key - jenkins.io-2026.key (not 2023!)
+- name: Download Jenkins GPG key (2026 official key)
+  shell: |
+    wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+    https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+  args:
+    executable: /bin/bash
 
 - name: Add Jenkins repository
-  apt_repository:
-    repo: "deb https://pkg.jenkins.io/debian-stable binary/"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/jenkins.list
+    content: "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/\n"
+    mode: '0644'
+
+- name: Update apt cache after Jenkins repo
+  apt:
+    update_cache: yes
 
 - name: Install Jenkins
   apt:
     name: jenkins
     state: present
-    update_cache: yes
 
 - name: Start and enable Jenkins
   service:
@@ -47,7 +78,7 @@
     line: "jenkins ALL=(ALL) NOPASSWD: ALL"
     validate: visudo -cf %s
 
-- name: Wait for Jenkins to be reachable on port {{ jenkins_port }}
+- name: Wait for Jenkins on port {{ jenkins_port }}
   wait_for:
     host: "0.0.0.0"
     port: "{{ jenkins_port }}"
@@ -70,7 +101,6 @@
       - " Jenkins is UP!"
       - " URL      : http://{{ jenkins_ec2_public_ip }}:{{ jenkins_port }}"
       - " Password : {{ jenkins_password.stdout }}"
-      - " NOTE: Ensure port 8080 is open in Security Group!"
       - "=================================================="
 
 # ── TRIVY ─────────────────────────────────────────────────
@@ -80,23 +110,39 @@
       - wget
       - apt-transport-https
       - gnupg
+      - curl
     state: present
 
-- name: Add Trivy GPG key
-  apt_key:
-    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
-    state: present
+- name: Remove old Trivy files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/trivy.list
+    - /etc/apt/keyrings/trivy-keyring.asc
+    - /etc/apt/trusted.gpg.d/trivy.gpg
+
+- name: Download Trivy GPG key
+  shell: |
+    wget -O /etc/apt/keyrings/trivy-keyring.asc \
+    https://aquasecurity.github.io/trivy-repo/deb/public.key
+  args:
+    executable: /bin/bash
 
 - name: Add Trivy repository
-  apt_repository:
-    repo: "deb https://aquasecurity.github.io/trivy-repo/deb generic main"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/trivy.list
+    content: "deb [signed-by=/etc/apt/keyrings/trivy-keyring.asc] https://aquasecurity.github.io/trivy-repo/deb generic main\n"
+    mode: '0644'
+
+- name: Update apt cache after Trivy repo
+  apt:
+    update_cache: yes
 
 - name: Install Trivy
   apt:
     name: trivy
     state: present
-    update_cache: yes
 
 # ── YQ ────────────────────────────────────────────────────
 - name: Install yq

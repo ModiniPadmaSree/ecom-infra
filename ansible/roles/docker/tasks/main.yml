@@ -1,5 +1,4 @@
 ---
-# tasks file for roles/docker
 - name: Update apt cache
   apt:
     update_cache: yes
@@ -15,15 +14,47 @@
       - lsb-release
     state: present
 
-- name: Add Docker GPG key
-  apt_key:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    state: present
+- name: Remove old Docker files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/docker.list
+    - /etc/apt/keyrings/docker.asc
+    - /usr/share/keyrings/docker-keyring.asc
+    - /usr/share/keyrings/docker-keyring.gpg
+    - /etc/apt/keyrings/docker.gpg
+
+- name: Remove Docker entries from sources.list
+  lineinfile:
+    path: /etc/apt/sources.list
+    regexp: ".*download.docker.com.*"
+    state: absent
+
+- name: Create apt keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+# Official Docker method
+- name: Download Docker GPG key
+  shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+  args:
+    executable: /bin/bash
 
 - name: Add Docker repository
-  apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable\n"
+    mode: '0644'
+
+- name: Update apt cache after Docker repo
+  apt:
+    update_cache: yes
 
 - name: Install Docker
   apt:
@@ -32,7 +63,6 @@
       - docker-ce-cli
       - containerd.io
     state: present
-    update_cache: yes
 
 - name: Start and enable Docker
   service:

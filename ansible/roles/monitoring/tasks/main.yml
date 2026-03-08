@@ -1,5 +1,4 @@
 ---
-# tasks file for roles/monitoring
 - name: Create node_exporter system user
   user:
     name: node_exporter
@@ -11,6 +10,7 @@
   get_url:
     url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
     dest: /tmp/node_exporter.tar.gz
+    mode: '0644'
 
 - name: Extract Node Exporter
   unarchive:
