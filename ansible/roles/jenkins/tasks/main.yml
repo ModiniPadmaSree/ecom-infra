@@ -1,4 +1,15 @@
 ---
+# ── CLEANUP ───────────────────────────────────────────────
+- name: Remove old Jenkins keys and repos
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/keyrings/jenkins-keyring.asc
+    - /usr/share/keyrings/jenkins-keyring.asc
+    - /usr/share/keyrings/jenkins-keyring.gpg
+    - /etc/apt/sources.list.d/jenkins.list
+
 # ── JAVA ──────────────────────────────────────────────────
 - name: Install Java 17
   apt:
@@ -7,21 +18,38 @@
     update_cache: yes
 
 # ── JENKINS ───────────────────────────────────────────────
-- name: Add Jenkins GPG key
-  apt_key:
-    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+- name: Install wget
+  apt:
+    name: wget
     state: present
 
+- name: Create keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Jenkins 2026 key
+  shell: >
+    wget -O /etc/apt/keyrings/jenkins-keyring.asc
+    https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+  args:
+    creates: /etc/apt/keyrings/jenkins-keyring.asc
+
 - name: Add Jenkins repository
-  apt_repository:
-    repo: "deb https://pkg.jenkins.io/debian-stable binary/"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/jenkins.list
+    content: "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/\n"
+    mode: '0644'
+
+- name: Update apt after Jenkins repo
+  apt:
+    update_cache: yes
 
 - name: Install Jenkins
   apt:
     name: jenkins
     state: present
-    update_cache: yes
 
 - name: Start and enable Jenkins
   service:
@@ -46,7 +74,7 @@
   wait_for:
     port: "{{ jenkins_port }}"
     delay: 10
-    timeout: 60
+    timeout: 160
 
 - name: Get Jenkins initial admin password
   command: cat {{ jenkins_home }}/secrets/initialAdminPassword
@@ -58,29 +86,36 @@
     msg: "Jenkins initial password: {{ jenkins_password.stdout }}"
 
 # ── TRIVY ─────────────────────────────────────────────────
-- name: Install Trivy dependencies
-  apt:
-    name:
-      - wget
-      - apt-transport-https
-      - gnupg
-    state: present
+- name: Remove old Trivy keys
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/share/keyrings/trivy-keyring.gpg
+    - /usr/share/keyrings/trivy-keyring.asc
+    - /etc/apt/sources.list.d/trivy.list
 
-- name: Add Trivy GPG key
-  apt_key:
-    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
-    state: present
+- name: Download Trivy key
+  shell: >
+    wget -O /usr/share/keyrings/trivy-keyring.asc
+    https://aquasecurity.github.io/trivy-repo/deb/public.key
+  args:
+    creates: /usr/share/keyrings/trivy-keyring.asc
 
 - name: Add Trivy repository
-  apt_repository:
-    repo: "deb https://aquasecurity.github.io/trivy-repo/deb generic main"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/trivy.list
+    content: "deb [signed-by=/usr/share/keyrings/trivy-keyring.asc] https://aquasecurity.github.io/trivy-repo/deb generic main\n"
+    mode: '0644'
+
+- name: Update apt after Trivy repo
+  apt:
+    update_cache: yes
 
 - name: Install Trivy
   apt:
     name: trivy
     state: present
-    update_cache: yes
 
 # ── YQ ────────────────────────────────────────────────────
 - name: Install yq
@@ -88,6 +123,7 @@
     url: https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
     dest: /usr/local/bin/yq
     mode: '0755'
+    force: yes
 
 # ── GIT ───────────────────────────────────────────────────
 - name: Install Git

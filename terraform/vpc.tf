@@ -1,88 +1,67 @@
-# ═══════════════════════════════════════════════════════════
-# VPC
-# ═══════════════════════════════════════════════════════════
+data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "ecom-vpc" }
+  tags = { Name = "mern-vpc" }
 }
 
-# ───────────────────────────────────────────────────────────
-# Internet Gateway
-# Allows public subnets to reach internet directly
-# ───────────────────────────────────────────────────────────
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "ecom-igw" }
+  tags   = { Name = "mern-igw" }
 }
 
-# ───────────────────────────────────────────────────────────
-# Public Subnets
-# Used by: Bastion Host, ALB, NAT Gateway
-# ───────────────────────────────────────────────────────────
+# ── PUBLIC SUBNETS (Jenkins + ALB + NAT Gateway) ──────────
 resource "aws_subnet" "public" {
   count                   = length(var.public_subnets)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnets[count.index]
-  map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
   tags = {
-    Name                                        = "ecom-public-${count.index}"
+    Name                                        = "public-${count.index}"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = "1"
   }
 }
 
-# ───────────────────────────────────────────────────────────
-# Private Subnets
-# Used by: Jenkins EC2, EKS Nodes
-# No public IP - internet access only through NAT Gateway
-# ───────────────────────────────────────────────────────────
+# ── PRIVATE SUBNETS (EKS Nodes) ───────────────────────────
 resource "aws_subnet" "private" {
-  count             = length(var.private_subnets)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnets[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  count                   = length(var.private_subnets)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.private_subnets[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = false
   tags = {
-    Name                                        = "ecom-private-${count.index}"
+    Name                                        = "private-${count.index}"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = "1"
   }
 }
 
-# ───────────────────────────────────────────────────────────
-# NAT Gateway
-# Sits in PUBLIC subnet
-# Private resources access internet THROUGH this
-# Prevents direct internet access to private resources
-# ───────────────────────────────────────────────────────────
+# ── NAT GATEWAY (private nodes need this for outbound) ────
 resource "aws_eip" "nat" {
   domain     = "vpc"
   depends_on = [aws_internet_gateway.igw]
-  tags       = { Name = "ecom-nat-eip" }
+  tags       = { Name = "mern-nat-eip" }
 }
 
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id # NAT must be in public subnet
-  tags          = { Name = "ecom-nat" }
+  subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.igw]
+  tags          = { Name = "mern-nat" }
 }
 
-# ───────────────────────────────────────────────────────────
-# Route Tables
-# ───────────────────────────────────────────────────────────
-
-# Public subnets → Internet Gateway (direct internet)
+# ── PUBLIC ROUTE TABLE → IGW ──────────────────────────────
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
-  tags = { Name = "ecom-public-rt" }
+  tags = { Name = "public-rt" }
 }
 
 resource "aws_route_table_association" "public" {
@@ -91,14 +70,14 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private subnets → NAT Gateway (not direct internet)
+# ── PRIVATE ROUTE TABLE → NAT ─────────────────────────────
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat.id
   }
-  tags = { Name = "ecom-private-rt" }
+  tags = { Name = "private-rt" }
 }
 
 resource "aws_route_table_association" "private" {

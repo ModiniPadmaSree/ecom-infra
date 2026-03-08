@@ -1,0 +1,7 @@
+ansible/group_vars/all/vault.yml
+*.retry
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+.terraform.lock.hcl

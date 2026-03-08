@@ -1,2 +1,6 @@
 ---
-# handlers file for roles/monitoring_agent
+#handlers
+- name: restart node_exporter
+  service:
+    name: node_exporter
+    state: restarted

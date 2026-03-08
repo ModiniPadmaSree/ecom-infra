@@ -1,8 +1,16 @@
 ---
+# ── CLEANUP ───────────────────────────────────────────────
+- name: Remove old Docker keys and repos
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/share/keyrings/docker-keyring.gpg
+    - /etc/apt/sources.list.d/docker.list
+
 - name: Update apt cache
   apt:
     update_cache: yes
-    cache_valid_time: 3600
 
 - name: Install Docker dependencies
   apt:
@@ -14,15 +22,28 @@
       - lsb-release
     state: present
 
-- name: Add Docker GPG key
-  apt_key:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    state: present
+- name: Create keyrings directory
+  file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker GPG key
+  shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /usr/share/keyrings/docker-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/docker-keyring.gpg
 
 - name: Add Docker repository
-  apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-    state: present
+  copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-keyring.gpg] https://download.docker.com/linux/ubuntu jammy stable\n"
+    mode: '0644'
+
+- name: Update apt after Docker repo
+  apt:
+    update_cache: yes
 
 - name: Install Docker
   apt:
@@ -31,7 +52,6 @@
       - docker-ce-cli
       - containerd.io
     state: present
-    update_cache: yes
 
 - name: Start and enable Docker
   service:
