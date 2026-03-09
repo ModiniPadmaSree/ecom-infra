@@ -1,3 +1,3 @@
 # NEVER commit to GitHub
 key_name = "padmasree"
-my_ip    = "175.101.105.160/32"
+my_ip    = "103.193.77.217/32"
